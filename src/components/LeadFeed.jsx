@@ -73,7 +73,7 @@ export default function LeadFeed({ token }) {
       {!loading && filtered.length === 0 && (
         <div className="text-center text-neutral-500 py-12">
           <Users size={32} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm">{search ? 'No matches' : 'No leads yet. They'll appear here when Meta forms are submitted.'}</p>
+          <p className="text-sm">{search ? 'No matches' : "No leads yet. They'll appear here when Meta forms are submitted."}</p>
         </div>
       )}
 
