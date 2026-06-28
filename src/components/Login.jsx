@@ -6,12 +6,22 @@ export default function Login({ onLogin }) {
 
   async function attempt(e) {
     e.preventDefault()
-    const res = await fetch('/api/contacts', {
+    setErr('')
+
+    const res = await fetch('/api/auth-check', {
       headers: { 'x-dashboard-token': pw },
     }).catch(() => null)
 
-    if (res?.ok) {
+    if (!res) {
+      setErr('Network error — check your connection.')
+      return
+    }
+
+    if (res.ok) {
       onLogin(pw)
+    } else if (res.status === 500) {
+      const data = await res.json().catch(() => ({}))
+      setErr(data.error || 'Server error — check Vercel environment variables.')
     } else {
       setErr('Incorrect password.')
     }
