@@ -117,7 +117,7 @@ export default function Dashboard({ token, onLogout }) {
                  onError={e => { e.target.style.display = 'none' }} />
             <div>
               <div className="font-bold text-sm leading-tight tracking-tight">Scale or Die</div>
-              <div className="text-[10px] leading-tight" style={{ color: '#cc0000' }}>Marketing Hub</div>
+              <div className="text-[10px] leading-tight" style={{ color: '#cc0000' }}>ScaleOrDie Workflows</div>
             </div>
           </div>
           <ClientSwitcher clients={clients} value={clientId} onChange={selectClient} onOnboard={() => setOnboardOpen(true)} />
