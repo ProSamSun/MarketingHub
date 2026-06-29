@@ -93,7 +93,7 @@ const ROUTE_TOOL = {
   },
 }
 
-const COMMAND_SYSTEM = `You are the command router for "Marketing Hub", an AI CRM.
+const COMMAND_SYSTEM = `You are the command router for "ScaleOrDie Workflows", an AI CRM.
 Map the user's instruction to exactly one action using the route_command tool.
 - "create / build a sequence, nurture, drip, follow-up, automation" → create_workflow (rich "description").
 - "send / blast / text / email / reactivate / win back" a group → campaign (pick campaignType; reactivation for win-back; extract businessName/offer/tone/tag).
