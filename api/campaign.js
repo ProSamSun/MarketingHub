@@ -5,17 +5,70 @@
  *   generate-copy   — Ask Claude to write campaign copy (SMS, email, reactivation)
  *   send-sms        — Send SMS to all contacts with a given tag
  *   send-email      — Send email to all contacts with a given tag
- *   reactivation    — Send reactivation SMS+email to cold leads
+ *   reactivation    — Generate + send reactivation SMS+email to cold leads
+ *
+ * Sends target the local Neon contacts (the same ones shown in the dashboard) via
+ * the unified messaging layer, so every send is logged to the inbox. Contacts
+ * tagged "unsubscribed" are always excluded.
  */
 
 import Anthropic from '@anthropic-ai/sdk'
-import { sendBulkSMS, sendBulkEmail, getContacts } from './_ghl.js'
+import { sql, migrate } from './_db.js'
+import { sendSMS, sendEmail } from './_messaging.js'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 function auth(req) {
   const token = req.headers['x-dashboard-token'] || req.body?.token
   return token === process.env.DASHBOARD_PASSWORD
+}
+
+// ── Audience ───────────────────────────────────────────────────────────────────
+
+async function contactsForTag(tag) {
+  const db = sql()
+  if (tag && tag.trim()) {
+    return db`
+      SELECT * FROM contacts
+      WHERE ${tag} = ANY(tags) AND NOT ('unsubscribed' = ANY(tags))
+      ORDER BY created_at DESC
+    `
+  }
+  return db`
+    SELECT * FROM contacts
+    WHERE NOT ('unsubscribed' = ANY(tags))
+    ORDER BY created_at DESC
+  `
+}
+
+async function bulkSMS({ tag, message }) {
+  const contacts = await contactsForTag(tag)
+  const results = []
+  for (const contact of contacts) {
+    if (!contact.phone) continue
+    try {
+      await sendSMS({ contact, body: message })
+      results.push({ contactId: contact.id, status: 'sent' })
+    } catch (err) {
+      results.push({ contactId: contact.id, status: 'error', error: err.message })
+    }
+  }
+  return { sent: results.filter(r => r.status === 'sent').length, total: contacts.length, results }
+}
+
+async function bulkEmail({ tag, subject, html, fromName, fromEmail }) {
+  const contacts = await contactsForTag(tag)
+  const results = []
+  for (const contact of contacts) {
+    if (!contact.email) continue
+    try {
+      await sendEmail({ contact, subject, body: html, fromName, fromEmail })
+      results.push({ contactId: contact.id, status: 'sent' })
+    } catch (err) {
+      results.push({ contactId: contact.id, status: 'error', error: err.message })
+    }
+  }
+  return { sent: results.filter(r => r.status === 'sent').length, total: contacts.length, results }
 }
 
 // ── Claude copy generation ───────────────────────────────────────────────────
@@ -80,6 +133,7 @@ export default async function handler(req, res) {
 
   if (!auth(req)) return res.status(401).json({ error: 'Unauthorized' })
 
+  await migrate()
   const { action } = body
 
   try {
@@ -94,7 +148,7 @@ export default async function handler(req, res) {
     if (action === 'send-sms') {
       const { tag, message } = body
       if (!tag || !message) return res.status(400).json({ error: 'tag and message required' })
-      const result = await sendBulkSMS({ tag, message })
+      const result = await bulkSMS({ tag, message })
       return res.status(200).json({ success: true, ...result })
     }
 
@@ -102,7 +156,7 @@ export default async function handler(req, res) {
     if (action === 'send-email') {
       const { tag, subject, html, fromName, fromEmail } = body
       if (!tag || !subject || !html) return res.status(400).json({ error: 'tag, subject, and html required' })
-      const result = await sendBulkEmail({ tag, subject, html, fromName, fromEmail })
+      const result = await bulkEmail({ tag, subject, html, fromName, fromEmail })
       return res.status(200).json({ success: true, ...result })
     }
 
@@ -110,24 +164,21 @@ export default async function handler(req, res) {
     if (action === 'reactivation') {
       const { businessName, offer, tag = 'meta-lead', fromName, fromEmail } = body
 
-      // Generate copy with Claude
       const [sms, subject, emailHtml] = await Promise.all([
         generateCopy({ type: 'reactivation_sms', businessName, offer }),
         generateCopy({ type: 'email_subject', businessName, offer }),
         generateCopy({ type: 'reactivation_email', businessName, offer }),
       ])
 
-      // Parse subject (Claude returns a JSON array of 3 options — take the first)
       let parsedSubject = subject
       try {
         const arr = JSON.parse(subject)
         parsedSubject = Array.isArray(arr) ? arr[0] : subject
       } catch {}
 
-      // Send both in parallel
       const [smsResult, emailResult] = await Promise.all([
-        sendBulkSMS({ tag, message: sms }),
-        sendBulkEmail({ tag, subject: parsedSubject, html: emailHtml, fromName, fromEmail }),
+        bulkSMS({ tag, message: sms }),
+        bulkEmail({ tag, subject: parsedSubject, html: emailHtml, fromName, fromEmail }),
       ])
 
       return res.status(200).json({
