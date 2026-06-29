@@ -2,18 +2,15 @@
  * GET  /api/webhook-meta  — Meta verification challenge
  * POST /api/webhook-meta  — Incoming Meta Lead Ads submission
  *
- * Flow when someone submits your Meta lead form:
- *  1. Meta POSTs the lead here.
- *  2. We map it to a client business via the Facebook Page ID (entry.id) or the
- *     lead form id, falling back to the Default client.
- *  3. We create/update the contact in Neon (scoped to that client), tagged
- *     new-lead + campaign/ad.
- *  4. We enroll them in that client's "Speed-to-Lead Blitz" workflow, which fires
- *     the first SMS + email within seconds (speed-to-lead).
+ * IMPORTANT: Meta's leadgen webhook does NOT include the person's field data —
+ * only a `leadgen_id`. We fetch the actual name/email/phone from the Graph API
+ * using the matched client's Page Access Token (clients.meta_page_token).
  *
- * Setup in Meta: Webhooks → leadgen, Callback URL /api/webhook-meta,
- * Verify Token = META_WEBHOOK_VERIFY_TOKEN. Put the Page ID (or form ids) on the
- * client during onboarding so leads route to the right business.
+ * Flow:
+ *  1. Map the lead to a client via Page ID (entry.id) or form id → Default fallback.
+ *  2. Fetch field data from Graph (or use inline field_data if a test payload has it).
+ *  3. Create/update the contact (scoped to the client), tagged new-lead.
+ *  4. Enroll in the client's "Speed-to-Lead Blitz" → first SMS+email fire instantly.
  */
 
 import { sql, migrate, defaultClientId } from './_db.js'
@@ -23,6 +20,7 @@ import { BLUEPRINTS } from './_blueprints.js'
 export const config = { maxDuration: 60 }
 
 const SPEED_TO_LEAD_NAME = BLUEPRINTS.find(b => b.isSpeedToLead)?.name || 'Speed-to-Lead Blitz'
+const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v21.0'
 
 const FIELD_MAP = {
   email: 'email',
@@ -47,16 +45,26 @@ function parseLeadFields(fieldData = []) {
   return parsed
 }
 
-async function clientIdForLead(db, pageId, formId) {
+async function fetchLeadFields(leadgenId, token) {
+  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${leadgenId}?access_token=${encodeURIComponent(token)}`
+  const res = await fetch(url)
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data?.error?.message || `Graph API ${res.status}`)
+  return parseLeadFields(data.field_data || [])
+}
+
+async function clientForLead(db, pageId, formId) {
   if (pageId || formId) {
     const [c] = await db`
-      SELECT id FROM clients
+      SELECT id, meta_page_token, lead_tag FROM clients
       WHERE (${pageId || ''} = ANY(meta_page_ids)) OR (${formId || ''} = ANY(meta_form_ids))
       LIMIT 1
     `
-    if (c) return c.id
+    if (c) return c
   }
-  return defaultClientId()
+  const did = await defaultClientId()
+  const [d] = await db`SELECT id, meta_page_token, lead_tag FROM clients WHERE id = ${did}`
+  return d || { id: did, meta_page_token: null, lead_tag: 'new-lead' }
 }
 
 async function upsertContact(db, cid, { firstName, lastName, email, phone, tags, source }) {
@@ -113,37 +121,45 @@ export default async function handler(req, res) {
     for (const change of entry.changes ?? []) {
       if (change.field !== 'leadgen') continue
 
-      const leadData = change.value || {}
-      const { field_data = [], ad_name, campaign_name, form_id } = leadData
-      const fields = parseLeadFields(field_data)
-      const { firstName = '', lastName = '', email = '', phone = '' } = fields
-
-      if (!email && !phone) {
-        console.warn('[webhook-meta] Lead has no email or phone, skipping')
-        continue
-      }
+      const v = change.value || {}
+      const { leadgen_id, field_data = [], ad_name, campaign_name, form_id } = v
 
       try {
-        const cid = await clientIdForLead(db, pageId, form_id)
-        const [client] = await db`SELECT lead_tag FROM clients WHERE id = ${cid}`
-        const tags = ['meta-lead', client?.lead_tag || 'new-lead', campaign_name, ad_name].filter(Boolean)
+        const client = await clientForLead(db, pageId, form_id)
+
+        // Get field data: inline (rare/test) or fetched from Graph (normal path)
+        let fields
+        if (field_data.length) {
+          fields = parseLeadFields(field_data)
+        } else if (leadgen_id && client.meta_page_token) {
+          fields = await fetchLeadFields(leadgen_id, client.meta_page_token)
+        } else {
+          processed.push({ leadgen_id, status: 'skipped', reason: 'No Page Access Token set for this client — add it in Settings → Integrations.' })
+          continue
+        }
+
+        const { firstName = '', lastName = '', email = '', phone = '' } = fields
+        if (!email && !phone) {
+          processed.push({ leadgen_id, status: 'skipped', reason: 'Lead has no email or phone' })
+          continue
+        }
+
+        const tags = ['meta-lead', client.lead_tag || 'new-lead', campaign_name, ad_name].filter(Boolean)
         const source = `Meta Ads — ${campaign_name ?? 'Unknown Campaign'}`
+        const contactId = await upsertContact(db, client.id, { firstName, lastName, email, phone, tags, source })
 
-        const contactId = await upsertContact(db, cid, { firstName, lastName, email, phone, tags, source })
-
-        // Enroll in the client's Speed-to-Lead workflow → first touch fires now
         const [wf] = await db`
           SELECT id FROM workflows
-          WHERE client_id = ${cid} AND name = ${SPEED_TO_LEAD_NAME} AND active = true
+          WHERE client_id = ${client.id} AND name = ${SPEED_TO_LEAD_NAME} AND active = true
           ORDER BY created_at ASC LIMIT 1
         `
-        if (wf) await enrollContact(contactId, wf.id, cid)
+        if (wf) await enrollContact(contactId, wf.id, client.id)
 
         processed.push({ contactId, email, enrolled: !!wf, status: 'created' })
-        console.log(`[webhook-meta] Lead ${firstName} ${lastName} → client ${cid} (enrolled: ${!!wf})`)
+        console.log(`[webhook-meta] Lead ${firstName} ${lastName} → client ${client.id} (enrolled: ${!!wf})`)
       } catch (err) {
         console.error('[webhook-meta] Error:', err.message)
-        processed.push({ email, status: 'error', error: err.message })
+        processed.push({ leadgen_id, status: 'error', error: err.message })
       }
     }
   }

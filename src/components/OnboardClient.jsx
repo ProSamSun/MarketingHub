@@ -5,7 +5,7 @@ import { Modal, Field, Button, Banner, Toggle, inputCls, labelCls } from '../lib
 const EMPTY = {
   name: '', industry: '', offer: '', outcome: '', tone: 'friendly',
   repName: '', fromName: '', fromEmail: '', twilioNumber: '', bookingLink: '',
-  leadTag: 'new-lead', metaPageIds: '', metaFormIds: '', enrollExisting: false,
+  leadTag: 'new-lead', metaPageIds: '', metaFormIds: '', metaPageToken: '', enrollExisting: false,
 }
 
 export default function OnboardClient({ api, open, onClose, onCreated }) {
@@ -153,6 +153,9 @@ export default function OnboardClient({ api, open, onClose, onCreated }) {
                 <input className={inputCls} value={form.metaFormIds} onChange={e => set('metaFormIds', e.target.value)} placeholder="form_123, form_456" />
               </Field>
             </div>
+            <Field label="Meta Page Access Token" hint="Long-lived Page token with leads_retrieval — required to pull lead data. You can also add this later in Settings.">
+              <input type="password" className={inputCls} value={form.metaPageToken} onChange={e => set('metaPageToken', e.target.value)} placeholder="EAAB..." />
+            </Field>
           </div>
         </details>
 

@@ -120,7 +120,7 @@ async function onboard(db, body) {
     name, industry = '', offer = '', outcome = '', tone = 'friendly',
     repName = '', fromName = '', fromEmail = '', twilioNumber = '',
     bookingLink = '', leadTag = 'new-lead',
-    metaPageIds = [], metaFormIds = [], enrollExisting = false,
+    metaPageIds = [], metaFormIds = [], metaPageToken = '', enrollExisting = false,
   } = body
   if (!name) throw new Error('Business name is required')
 
@@ -128,11 +128,11 @@ async function onboard(db, body) {
 
   const [client] = await db`
     INSERT INTO clients (name, slug, industry, offer, outcome, tone, rep_name, from_name, from_email,
-                         twilio_number, booking_link, lead_tag, meta_page_ids, meta_form_ids)
+                         twilio_number, booking_link, lead_tag, meta_page_ids, meta_form_ids, meta_page_token)
     VALUES (${name}, ${slug}, ${industry}, ${offer}, ${outcome}, ${tone}, ${repName},
             ${fromName || repName}, ${fromEmail || null}, ${twilioNumber || null},
             ${bookingLink || null}, ${leadTag || 'new-lead'},
-            ${metaPageIds}::text[], ${metaFormIds}::text[])
+            ${metaPageIds}::text[], ${metaFormIds}::text[], ${metaPageToken || null})
     RETURNING *
   `
 
@@ -202,7 +202,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
-      const clients = await db`SELECT * FROM clients ORDER BY created_at ASC`
+      const rows = await db`SELECT * FROM clients ORDER BY created_at ASC`
+      // Never expose the Page token to the browser; just whether one is configured.
+      const clients = rows.map(c => ({ ...c, meta_page_token: undefined, meta_page_token_set: !!c.meta_page_token }))
       return res.status(200).json({ clients })
     }
 
@@ -239,10 +241,12 @@ export default async function handler(req, res) {
           lead_tag      = COALESCE(${b.leadTag       ?? null}, lead_tag),
           meta_page_ids = COALESCE(${b.metaPageIds   ?? null}::text[], meta_page_ids),
           meta_form_ids = COALESCE(${b.metaFormIds   ?? null}::text[], meta_form_ids),
+          meta_page_token = COALESCE(NULLIF(${b.metaPageToken ?? ''}, ''), meta_page_token),
           active        = COALESCE(${b.active         ?? null}, active)
         WHERE id = ${id}
       `
-      const [client] = await db`SELECT * FROM clients WHERE id = ${id}`
+      const [row] = await db`SELECT * FROM clients WHERE id = ${id}`
+      const client = row ? { ...row, meta_page_token: undefined, meta_page_token_set: !!row.meta_page_token } : null
       return res.status(200).json({ client })
     }
 

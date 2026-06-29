@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, Users, Workflow as WorkflowIcon, Kanban, Megaphone,
-  Inbox as InboxIcon, LogOut, Sparkles, Plus,
+  Inbox as InboxIcon, LogOut, Sparkles, Plus, Settings as SettingsIcon,
 } from 'lucide-react'
 import { makeApi } from '../lib/api.js'
 import { Loading } from '../lib/ui.jsx'
@@ -15,6 +15,7 @@ const Workflows = lazy(() => import('./modules/Workflows.jsx'))
 const Pipeline = lazy(() => import('./modules/Pipeline.jsx'))
 const Campaigns = lazy(() => import('./modules/Campaigns.jsx'))
 const Inbox = lazy(() => import('./modules/Inbox.jsx'))
+const Settings = lazy(() => import('./modules/Settings.jsx'))
 
 const NAV = [
   { key: 'analytics', label: 'Home',      icon: LayoutDashboard },
@@ -133,6 +134,12 @@ export default function Dashboard({ token, onLogout }) {
             <kbd className="text-[10px] text-neutral-600 border border-neutral-700 rounded px-1.5 py-0.5">⌘K</kbd>
           </button>
           <button
+            onClick={() => setTab('settings')}
+            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors ${tab === 'settings' ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900'}`}
+          >
+            <SettingsIcon size={16} /> Settings
+          </button>
+          <button
             onClick={onLogout}
             className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900 transition-colors"
           >
@@ -158,6 +165,7 @@ export default function Dashboard({ token, onLogout }) {
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => setOnboardOpen(true)} className="p-2 text-violet-400 hover:text-violet-300" aria-label="Onboard client"><Plus size={18} /></button>
           <button onClick={() => setCmdOpen(true)} className="p-2 text-violet-400 hover:text-violet-300" aria-label="Ask AI"><Sparkles size={18} /></button>
+          <button onClick={() => setTab('settings')} className="p-2 text-neutral-400 hover:text-neutral-200" aria-label="Settings"><SettingsIcon size={18} /></button>
           <button onClick={onLogout} className="p-2 text-neutral-500 hover:text-neutral-300" aria-label="Sign out"><LogOut size={18} /></button>
         </div>
       </header>
@@ -172,6 +180,7 @@ export default function Dashboard({ token, onLogout }) {
             {tab === 'pipeline'  && <Pipeline  {...moduleProps('pipeline')} />}
             {tab === 'campaigns' && <Campaigns {...moduleProps('campaigns')} />}
             {tab === 'inbox'     && <Inbox     {...moduleProps('inbox')} />}
+            {tab === 'settings'  && <Settings  api={api} client={clients.find(c => c.id === clientId)} onSaved={loadClients} />}
           </Suspense>
         </div>
       </main>
