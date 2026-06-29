@@ -30,7 +30,7 @@ export default function Login({ onLogin }) {
   return (
     <div className="min-h-dvh flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
-        <h1 className="text-2xl font-bold tracking-tight mb-1">Marketing Hub</h1>
+        <h1 className="text-2xl font-bold tracking-tight mb-1">ScaleOrDie Workflows</h1>
         <p className="text-sm text-neutral-500 mb-8">GHL + Meta + Claude</p>
 
         <form onSubmit={attempt} className="flex flex-col gap-4">

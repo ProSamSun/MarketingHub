@@ -1,4 +1,4 @@
-# Marketing Hub
+# ScaleOrDie Workflows
 
 GHL + Meta Ads + Claude AI — automated lead capture and campaign management.
 

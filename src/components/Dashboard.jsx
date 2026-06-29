@@ -113,8 +113,8 @@ export default function Dashboard({ token, onLogout }) {
       <aside className="hidden md:flex md:flex-col md:w-56 shrink-0 border-r border-neutral-800 bg-neutral-950 sticky top-0 h-dvh">
         <div className="px-4 py-4 flex flex-col gap-3 border-b border-neutral-800">
           <h1 className="font-bold tracking-tight flex items-center gap-2 px-1">
-            <span className="grid place-items-center w-7 h-7 rounded-lg bg-violet-600 text-white text-sm">M</span>
-            Marketing Hub
+            <span className="grid place-items-center w-7 h-7 rounded-lg bg-violet-600 text-white text-sm">S</span>
+            ScaleOrDie Workflows
           </h1>
           <ClientSwitcher clients={clients} value={clientId} onChange={selectClient} onOnboard={() => setOnboardOpen(true)} />
         </div>
@@ -151,14 +151,14 @@ export default function Dashboard({ token, onLogout }) {
       {/* ── Mobile top header ──────────────────────────────────────────── */}
       <header className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-2 px-4 py-3 border-b border-neutral-800 bg-neutral-950/95 backdrop-blur">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="grid place-items-center w-6 h-6 rounded-md bg-violet-600 text-white text-xs shrink-0">M</span>
+          <span className="grid place-items-center w-6 h-6 rounded-md bg-violet-600 text-white text-xs shrink-0">S</span>
           <select
             value={clientId}
             onChange={e => selectClient(e.target.value)}
             aria-label="Active client"
             className="min-w-0 max-w-[55vw] bg-transparent text-sm font-semibold text-neutral-100 outline-none truncate"
           >
-            {clients.length === 0 && <option value="">Marketing Hub</option>}
+            {clients.length === 0 && <option value="">ScaleOrDie Workflows</option>}
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
