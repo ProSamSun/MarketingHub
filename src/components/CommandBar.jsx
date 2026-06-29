@@ -40,7 +40,7 @@ export default function CommandBar({ api, open, onClose, onRoute }) {
     setError('')
     setInfo('')
     try {
-      const result = await api.post('/api/command', { input: value })
+      const result = await api.post('/api/workflows?action=command', { input: value })
       const intent = result?.intent
       if (intent?.action === 'unknown') {
         setInfo(result?.message || intent?.message || "Sorry, I didn't understand that. Try rephrasing.")

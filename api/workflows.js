@@ -62,6 +62,58 @@ Make the copy compelling and specific to the description provided.`
   }
 }
 
+// ── AI command bar: classify a plain-English instruction into a routed action ──
+const ROUTE_TOOL = {
+  name: 'route_command',
+  description: 'Route a natural-language CRM command to the correct action with extracted parameters.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['create_workflow', 'campaign', 'search_contacts', 'navigate', 'unknown'],
+        description:
+          'create_workflow: build a multi-step automation/nurture sequence. ' +
+          'campaign: send a one-off SMS, email, or reactivation blast. ' +
+          'search_contacts: find/filter contacts by text or tag. ' +
+          'navigate: just open a section of the app. ' +
+          'unknown: the request does not map to any capability.',
+      },
+      description:  { type: 'string', description: 'For create_workflow: a full description for an AI workflow generator.' },
+      campaignType: { type: 'string', enum: ['sms', 'email', 'reactivation'] },
+      businessName: { type: 'string' },
+      offer:        { type: 'string' },
+      tone:         { type: 'string', enum: ['friendly', 'professional', 'urgent', 'casual', 'bold'] },
+      tag:          { type: 'string', description: 'Contact tag to target (campaign) or filter by (search_contacts).' },
+      search:       { type: 'string', description: 'For search_contacts: free-text query.' },
+      destination:  { type: 'string', enum: ['analytics', 'contacts', 'workflows', 'pipeline', 'campaigns', 'inbox'] },
+      message:      { type: 'string', description: 'A short, friendly one-line confirmation shown to the user.' },
+    },
+    required: ['action', 'message'],
+  },
+}
+
+const COMMAND_SYSTEM = `You are the command router for "Marketing Hub", an AI CRM.
+Map the user's instruction to exactly one action using the route_command tool.
+- "create / build a sequence, nurture, drip, follow-up, automation" → create_workflow (rich "description").
+- "send / blast / text / email / reactivate / win back" a group → campaign (pick campaignType; reactivation for win-back; extract businessName/offer/tone/tag).
+- "show / find / list / who / filter / search" contacts → search_contacts ("tag" for "tagged X", else "search").
+- "go to / open / show me the <section>" → navigate.
+- Anything unclear → unknown. Always include a concise, friendly "message".`
+
+async function routeCommand(input) {
+  const msg = await claude.messages.create({
+    model: 'claude-opus-4-8',
+    max_tokens: 1024,
+    system: COMMAND_SYSTEM,
+    tools: [ROUTE_TOOL],
+    tool_choice: { type: 'tool', name: 'route_command' },
+    messages: [{ role: 'user', content: input }],
+  })
+  const toolUse = msg.content.find(b => b.type === 'tool_use')
+  return toolUse?.input || { action: 'unknown', message: "Sorry, I couldn't understand that." }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
@@ -87,6 +139,14 @@ export default async function handler(req, res) {
       if (!description) return res.status(400).json({ error: 'description required' })
       const workflow = await aiGenerateWorkflow(description)
       return res.status(200).json({ workflow })
+    }
+
+    // ── AI command bar: classify a plain-English instruction ──────────────
+    if (action === 'command') {
+      const input = (body.input || '').trim()
+      if (!input) return res.status(400).json({ error: 'input required' })
+      const intent = await routeCommand(input)
+      return res.status(200).json({ intent, message: intent.message })
     }
 
     // ── Enroll contact in workflow ────────────────────────────────────────
