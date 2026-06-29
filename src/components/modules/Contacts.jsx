@@ -238,7 +238,7 @@ export default function Contacts({ api, pending, onPendingConsumed }) {
 function Avatar({ contact, size = 'sm' }) {
   const cls = size === 'lg' ? 'w-12 h-12 text-base' : 'w-9 h-9 text-xs'
   return (
-    <span className={`grid place-items-center shrink-0 rounded-full bg-violet-600/20 text-violet-300 font-semibold ${cls}`}>
+    <span className={`grid place-items-center shrink-0 rounded-full bg-red-700/20 text-red-400 font-semibold ${cls}`}>
       {initials(contact)}
     </span>
   )
@@ -432,7 +432,7 @@ function MessageItem({ message }) {
         <span className="flex items-center gap-1.5 text-neutral-400">
           <ArrowRight
             size={12}
-            className={outbound ? 'text-violet-400' : 'text-emerald-400 rotate-180'}
+            className={outbound ? 'text-red-500' : 'text-emerald-400 rotate-180'}
           />
           <span className="uppercase tracking-wide text-[10px] text-neutral-500">{message.type}</span>
           <span className="text-neutral-600">·</span>

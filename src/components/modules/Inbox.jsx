@@ -123,7 +123,7 @@ export default function Inbox({ api }) {
                 tabIndex={0}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenId(g.key) } }}
               >
-                <span className="grid place-items-center w-10 h-10 shrink-0 rounded-full bg-violet-600/20 text-violet-300 text-sm font-semibold">
+                <span className="grid place-items-center w-10 h-10 shrink-0 rounded-full bg-red-700/20 text-red-400 text-sm font-semibold">
                   {initials(g.contact)}
                 </span>
 
@@ -179,7 +179,7 @@ export default function Inbox({ api }) {
                   <div
                     className={`max-w-[85%] rounded-xl border px-3.5 py-2.5 ${
                       outbound
-                        ? 'bg-violet-600/15 border-violet-700/50'
+                        ? 'bg-red-700/15 border-red-800/50'
                         : 'bg-neutral-800/60 border-neutral-700'
                     }`}
                   >
@@ -191,7 +191,7 @@ export default function Inbox({ api }) {
                       <span
                         className={`text-[10px] font-medium rounded-full px-1.5 py-0.5 ${
                           outbound
-                            ? 'bg-violet-600/30 text-violet-200'
+                            ? 'bg-red-700/30 text-red-300'
                             : 'bg-neutral-700 text-neutral-300'
                         }`}
                       >

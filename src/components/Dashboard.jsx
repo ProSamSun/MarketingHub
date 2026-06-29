@@ -8,14 +8,14 @@ import { Loading } from '../lib/ui.jsx'
 import CommandBar from './CommandBar.jsx'
 import OnboardClient from './OnboardClient.jsx'
 
-// Code-split each module so the initial bundle stays small (recharts etc. load on demand)
+// Code-split each module so the initial bundle stays small
 const AnalyticsHome = lazy(() => import('./modules/AnalyticsHome.jsx'))
-const Contacts = lazy(() => import('./modules/Contacts.jsx'))
-const Workflows = lazy(() => import('./modules/Workflows.jsx'))
-const Pipeline = lazy(() => import('./modules/Pipeline.jsx'))
-const Campaigns = lazy(() => import('./modules/Campaigns.jsx'))
-const Inbox = lazy(() => import('./modules/Inbox.jsx'))
-const Settings = lazy(() => import('./modules/Settings.jsx'))
+const Contacts      = lazy(() => import('./modules/Contacts.jsx'))
+const Workflows     = lazy(() => import('./modules/Workflows.jsx'))
+const Pipeline      = lazy(() => import('./modules/Pipeline.jsx'))
+const Campaigns     = lazy(() => import('./modules/Campaigns.jsx'))
+const Inbox         = lazy(() => import('./modules/Inbox.jsx'))
+const Settings      = lazy(() => import('./modules/Settings.jsx'))
 
 const NAV = [
   { key: 'analytics', label: 'Home',      icon: LayoutDashboard },
@@ -27,11 +27,11 @@ const NAV = [
 ]
 
 export default function Dashboard({ token, onLogout }) {
-  const [tab, setTab] = useState('analytics')
-  const [cmdOpen, setCmdOpen] = useState(false)
-  const [pending, setPending] = useState({}) // per-module routing payloads from the command bar
+  const [tab, setTab]           = useState('analytics')
+  const [cmdOpen, setCmdOpen]   = useState(false)
+  const [pending, setPending]   = useState({})
   const [clientId, setClientId] = useState(() => sessionStorage.getItem('mh_client') || '')
-  const [clients, setClients] = useState([])
+  const [clients, setClients]   = useState([])
   const [onboardOpen, setOnboardOpen] = useState(false)
   const api = useMemo(() => makeApi(token, clientId), [token, clientId])
 
@@ -47,7 +47,7 @@ export default function Dashboard({ token, onLogout }) {
         if (id) sessionStorage.setItem('mh_client', id)
         return id
       })
-    } catch { /* ignore — falls back to the server's default client */ }
+    } catch { /* falls back to server's default */ }
   }, [token])
 
   useEffect(() => { loadClients() }, [loadClients])
@@ -65,7 +65,6 @@ export default function Dashboard({ token, onLogout }) {
     loadClients()
   }
 
-  // ⌘K / Ctrl+K toggles the command bar
   useEffect(() => {
     const h = e => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -103,19 +102,24 @@ export default function Dashboard({ token, onLogout }) {
     setCmdOpen(false)
   }
 
-  const consume = key => setPending(p => (p[key] === undefined ? p : { ...p, [key]: undefined }))
-
-  const moduleProps = key => ({ api, pending: pending[key], onPendingConsumed: () => consume(key) })
+  const consume      = key => setPending(p => (p[key] === undefined ? p : { ...p, [key]: undefined }))
+  const moduleProps  = key => ({ api, pending: pending[key], onPendingConsumed: () => consume(key) })
 
   return (
     <div className="min-h-dvh md:flex">
-      {/* ── Desktop sidebar ────────────────────────────────────────────── */}
+
+      {/* ── Desktop sidebar ─────────────────────────────────────────── */}
       <aside className="hidden md:flex md:flex-col md:w-56 shrink-0 border-r border-neutral-800 bg-neutral-950 sticky top-0 h-dvh">
         <div className="px-4 py-4 flex flex-col gap-3 border-b border-neutral-800">
-          <h1 className="font-bold tracking-tight flex items-center gap-2 px-1">
-            <span className="grid place-items-center w-7 h-7 rounded-lg bg-violet-600 text-white text-sm">M</span>
-            Marketing Hub
-          </h1>
+          {/* Scale or Die logo */}
+          <div className="flex items-center gap-2.5 px-1">
+            <img src="/logo-mark.png" alt="Scale or Die" className="h-8 w-8 object-contain"
+                 onError={e => { e.target.style.display = 'none' }} />
+            <div>
+              <div className="font-bold text-sm leading-tight tracking-tight">Scale or Die</div>
+              <div className="text-[10px] leading-tight" style={{ color: '#cc0000' }}>Marketing Hub</div>
+            </div>
+          </div>
           <ClientSwitcher clients={clients} value={clientId} onChange={selectClient} onOnboard={() => setOnboardOpen(true)} />
         </div>
 
@@ -130,12 +134,17 @@ export default function Dashboard({ token, onLogout }) {
             onClick={() => setCmdOpen(true)}
             className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-sm text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition-colors"
           >
-            <span className="flex items-center gap-2"><Sparkles size={16} className="text-violet-400" /> Ask AI</span>
+            <span className="flex items-center gap-2">
+              <Sparkles size={16} style={{ color: '#cc0000' }} /> Ask AI
+            </span>
             <kbd className="text-[10px] text-neutral-600 border border-neutral-700 rounded px-1.5 py-0.5">⌘K</kbd>
           </button>
           <button
             onClick={() => setTab('settings')}
-            className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors ${tab === 'settings' ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900'}`}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors"
+            style={tab === 'settings'
+              ? { background: '#cc0000', color: '#fff' }
+              : { color: '#737373' }}
           >
             <SettingsIcon size={16} /> Settings
           </button>
@@ -148,29 +157,30 @@ export default function Dashboard({ token, onLogout }) {
         </div>
       </aside>
 
-      {/* ── Mobile top header ──────────────────────────────────────────── */}
+      {/* ── Mobile top header ──────────────────────────────────────── */}
       <header className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-2 px-4 py-3 border-b border-neutral-800 bg-neutral-950/95 backdrop-blur">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="grid place-items-center w-6 h-6 rounded-md bg-violet-600 text-white text-xs shrink-0">M</span>
+          <img src="/logo-mark.png" alt="Scale or Die" className="h-7 w-7 object-contain shrink-0"
+               onError={e => { e.target.style.display = 'none' }} />
           <select
             value={clientId}
             onChange={e => selectClient(e.target.value)}
             aria-label="Active client"
             className="min-w-0 max-w-[55vw] bg-transparent text-sm font-semibold text-neutral-100 outline-none truncate"
           >
-            {clients.length === 0 && <option value="">Marketing Hub</option>}
+            {clients.length === 0 && <option value="">Scale or Die</option>}
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => setOnboardOpen(true)} className="p-2 text-violet-400 hover:text-violet-300" aria-label="Onboard client"><Plus size={18} /></button>
-          <button onClick={() => setCmdOpen(true)} className="p-2 text-violet-400 hover:text-violet-300" aria-label="Ask AI"><Sparkles size={18} /></button>
-          <button onClick={() => setTab('settings')} className="p-2 text-neutral-400 hover:text-neutral-200" aria-label="Settings"><SettingsIcon size={18} /></button>
-          <button onClick={onLogout} className="p-2 text-neutral-500 hover:text-neutral-300" aria-label="Sign out"><LogOut size={18} /></button>
+          <button onClick={() => setOnboardOpen(true)} className="p-2 hover:text-neutral-100 transition-colors" style={{ color: '#cc0000' }} aria-label="Onboard client"><Plus size={18} /></button>
+          <button onClick={() => setCmdOpen(true)}     className="p-2 hover:text-neutral-100 transition-colors" style={{ color: '#cc0000' }} aria-label="Ask AI"><Sparkles size={18} /></button>
+          <button onClick={() => setTab('settings')}   className="p-2 text-neutral-400 hover:text-neutral-200" aria-label="Settings"><SettingsIcon size={18} /></button>
+          <button onClick={onLogout}                   className="p-2 text-neutral-500 hover:text-neutral-300" aria-label="Sign out"><LogOut size={18} /></button>
         </div>
       </header>
 
-      {/* ── Content ────────────────────────────────────────────────────── */}
+      {/* ── Content ─────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0">
         <div className="max-w-5xl mx-auto w-full p-4 sm:p-6 pb-28 md:pb-10">
           <Suspense key={clientId} fallback={<Loading />}>
@@ -185,7 +195,7 @@ export default function Dashboard({ token, onLogout }) {
         </div>
       </main>
 
-      {/* ── Mobile bottom nav ──────────────────────────────────────────── */}
+      {/* ── Mobile bottom nav ──────────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-20 grid grid-cols-6 border-t border-neutral-800 bg-neutral-950/95 backdrop-blur">
         {NAV.map(n => {
           const Icon = n.icon
@@ -194,7 +204,8 @@ export default function Dashboard({ token, onLogout }) {
             <button
               key={n.key}
               onClick={() => setTab(n.key)}
-              className={`flex flex-col items-center gap-0.5 py-2.5 text-[10px] transition-colors ${active ? 'text-violet-400' : 'text-neutral-500'}`}
+              className="flex flex-col items-center gap-0.5 py-2.5 text-[10px] transition-colors"
+              style={{ color: active ? '#cc0000' : '#737373' }}
             >
               <Icon size={20} />
               {n.label}
@@ -203,7 +214,7 @@ export default function Dashboard({ token, onLogout }) {
         })}
       </nav>
 
-      <CommandBar api={api} open={cmdOpen} onClose={() => setCmdOpen(false)} onRoute={routeIntent} />
+      <CommandBar  api={api} open={cmdOpen}     onClose={() => setCmdOpen(false)}   onRoute={routeIntent} />
       <OnboardClient api={api} open={onboardOpen} onClose={() => setOnboardOpen(false)} onCreated={handleClientCreated} />
     </div>
   )
@@ -218,7 +229,7 @@ function ClientSwitcher({ clients, value, onChange, onOnboard }) {
           value={value}
           onChange={e => onChange(e.target.value)}
           aria-label="Active client"
-          className="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-2 text-sm text-neutral-100 outline-none focus:border-violet-500 transition-colors truncate"
+          className="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-2 text-sm text-neutral-100 outline-none focus:border-red-600 transition-colors truncate"
         >
           {clients.length === 0 && <option value="">Loading…</option>}
           {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -227,7 +238,10 @@ function ClientSwitcher({ clients, value, onChange, onOnboard }) {
           onClick={onOnboard}
           title="Onboard client"
           aria-label="Onboard client"
-          className="px-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white transition-colors shrink-0"
+          className="px-2.5 rounded-lg text-white transition-colors shrink-0"
+          style={{ background: '#cc0000' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#aa0000' }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#cc0000' }}
         >
           <Plus size={16} />
         </button>
@@ -241,9 +255,12 @@ function NavItem({ item, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-        active ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900'
-      }`}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+      style={active
+        ? { background: '#cc0000', color: '#fff' }
+        : { color: '#737373' }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.color = '#f2f2f2' }}
+      onMouseLeave={e => { if (!active) e.currentTarget.style.color = '#737373' }}
     >
       <Icon size={18} />
       {item.label}

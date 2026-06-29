@@ -2,6 +2,9 @@
 
 :root {
   color-scheme: dark;
+  --brand:       #cc0000;
+  --brand-hover: #aa0000;
+  --brand-dim:   rgba(204,0,0,0.15);
 }
 
 body {

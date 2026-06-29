@@ -175,7 +175,7 @@ export default function Pipeline({ api, pending, onPendingConsumed }) {
                   if (id != null) moveDeal(id, stage.id)
                 }}
                 className={`flex flex-col w-[280px] min-w-[260px] shrink-0 rounded-xl border transition-colors ${
-                  over ? 'border-violet-500 bg-violet-600/5' : 'border-neutral-800 bg-neutral-900'
+                  over ? 'border-red-600 bg-red-700/5' : 'border-neutral-800 bg-neutral-900'
                 }`}
               >
                 {/* Column header */}
@@ -235,7 +235,7 @@ export default function Pipeline({ api, pending, onPendingConsumed }) {
                           )}
 
                           <div className="flex items-center justify-between gap-2 mt-2">
-                            <span className="text-sm font-semibold text-violet-300">{currency(deal.value)}</span>
+                            <span className="text-sm font-semibold text-red-400">{currency(deal.value)}</span>
                             <span className="text-[11px] text-neutral-600">{shortDate(deal.created_at)}</span>
                           </div>
 
@@ -253,7 +253,7 @@ export default function Pipeline({ api, pending, onPendingConsumed }) {
                                 if (target) moveDeal(deal.id, target.id)
                               }}
                               aria-label="Move deal to stage"
-                              className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-neutral-400 outline-none focus:border-violet-500 transition-colors"
+                              className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 text-xs text-neutral-400 outline-none focus:border-red-600 transition-colors"
                             >
                               {stages.map(s => (
                                 <option key={s.id} value={String(s.id)}>

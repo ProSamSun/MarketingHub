@@ -141,7 +141,7 @@ export default function Campaigns({ api, pending, onPendingConsumed }) {
               key={t.key}
               onClick={() => { setMode(t.key); setResult(null); setError('') }}
               className={`flex items-center justify-center gap-2 rounded-lg px-2 py-2 text-sm font-medium transition-colors ${
-                on ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
+                on ? 'bg-red-700 text-white' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
               }`}
             >
               <Icon size={15} />

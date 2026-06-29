@@ -77,8 +77,8 @@ export default function CommandBar({ api, open, onClose, onRoute }) {
         {/* Input row */}
         <div className="flex items-center gap-3 px-4 py-3.5 border-b border-neutral-800">
           {loading
-            ? <Spinner size={18} className="text-violet-400 shrink-0" />
-            : <Sparkles size={18} className="text-violet-400 shrink-0" />}
+            ? <Spinner size={18} className="text-red-500 shrink-0" />
+            : <Sparkles size={18} className="text-red-500 shrink-0" />}
           <input
             ref={inputRef}
             type="text"
@@ -114,7 +114,7 @@ export default function CommandBar({ api, open, onClose, onRoute }) {
                   className="group flex items-center justify-between gap-3 text-left text-sm text-neutral-300 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 rounded-xl px-3.5 py-2.5 transition-colors"
                 >
                   <span className="min-w-0 truncate">{s}</span>
-                  <ArrowRight size={15} className="text-neutral-600 group-hover:text-violet-400 transition-colors shrink-0" />
+                  <ArrowRight size={15} className="text-neutral-600 group-hover:text-red-500 transition-colors shrink-0" />
                 </button>
               ))}
             </div>

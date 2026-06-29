@@ -135,7 +135,7 @@ export default function AnalyticsHome({ api, pending, onPendingConsumed, onNavig
           <Card className="p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold flex items-center gap-2">
-                <TrendingUp size={15} className="text-violet-400" /> Leads per day
+                <TrendingUp size={15} className="text-red-500" /> Leads per day
               </h3>
               <span className="text-xs text-neutral-500">Last {leadsPerDay.length} days</span>
             </div>
@@ -150,8 +150,8 @@ export default function AnalyticsHome({ api, pending, onPendingConsumed, onNavig
                 <AreaChart data={leadsPerDay} margin={{ top: 6, right: 8, left: -18, bottom: 0 }}>
                   <defs>
                     <linearGradient id="leadsFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#7c3aed" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#cc0000" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#cc0000" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#262626" vertical={false} />
@@ -186,7 +186,7 @@ export default function AnalyticsHome({ api, pending, onPendingConsumed, onNavig
                     type="monotone"
                     dataKey="count"
                     name="Leads"
-                    stroke="#7c3aed"
+                    stroke="#cc0000"
                     strokeWidth={2}
                     fill="url(#leadsFill)"
                   />
@@ -200,7 +200,7 @@ export default function AnalyticsHome({ api, pending, onPendingConsumed, onNavig
             <Card className="p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Kanban size={15} className="text-violet-400" /> Pipeline
+                  <Kanban size={15} className="text-red-500" /> Pipeline
                 </h3>
                 <button
                   onClick={() => onNavigate?.('pipeline')}
@@ -220,7 +220,7 @@ export default function AnalyticsHome({ api, pending, onPendingConsumed, onNavig
                   {pipeline.map((s, i) => {
                     const count = Number(s.deals || 0)
                     const pct = maxDeals > 0 ? Math.max((count / maxDeals) * 100, count > 0 ? 6 : 0) : 0
-                    const color = s.color || '#7c3aed'
+                    const color = s.color || '#cc0000'
                     return (
                       <div key={s.name ?? i} className="flex flex-col gap-1.5">
                         <div className="flex items-center justify-between text-xs">
@@ -253,7 +253,7 @@ export default function AnalyticsHome({ api, pending, onPendingConsumed, onNavig
             <Card className="p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Users size={15} className="text-violet-400" /> Top Sources
+                  <Users size={15} className="text-red-500" /> Top Sources
                 </h3>
               </div>
               {topSources.length === 0 ? (
@@ -279,7 +279,7 @@ export default function AnalyticsHome({ api, pending, onPendingConsumed, onNavig
                         </div>
                         <div className="h-1.5 rounded-full bg-neutral-800 overflow-hidden">
                           <div
-                            className="h-full rounded-full bg-violet-600/70 transition-all"
+                            className="h-full rounded-full bg-red-700/70 transition-all"
                             style={{ width: `${pct}%` }}
                           />
                         </div>

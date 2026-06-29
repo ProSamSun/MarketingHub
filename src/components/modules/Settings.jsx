@@ -135,7 +135,7 @@ function CopyRow({ icon: Icon, label, value }) {
   }
   return (
     <div className="flex items-center gap-3">
-      <Icon size={15} className="text-violet-400 shrink-0" />
+      <Icon size={15} className="text-red-500 shrink-0" />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-neutral-400">{label}</p>
         <p className="text-xs text-neutral-200 font-mono truncate">{value}</p>

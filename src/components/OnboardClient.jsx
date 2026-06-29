@@ -51,7 +51,7 @@ export default function OnboardClient({ api, open, onClose, onCreated }) {
     return (
       <Modal open={open} onClose={finish} title="Client onboarded" footer={<Button icon={CheckCircle} onClick={finish}>Open {result.client?.name}</Button>}>
         <div className="flex flex-col items-center text-center gap-3 py-2">
-          <div className="grid place-items-center w-12 h-12 rounded-full bg-violet-600/20 text-violet-300"><Rocket size={22} /></div>
+          <div className="grid place-items-center w-12 h-12 rounded-full bg-red-700/20 text-red-400"><Rocket size={22} /></div>
           <h3 className="font-semibold">{result.client?.name} is live 🎉</h3>
           <p className="text-sm text-neutral-400">Their lead machine is ready:</p>
           <ul className="text-sm text-neutral-300 flex flex-col gap-1.5 mt-1 w-full">

@@ -292,7 +292,7 @@ export default function Workflows({ api, pending, onPendingConsumed }) {
               type="button"
               onClick={() => setMode('ai')}
               className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                mode === 'ai' ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-neutral-200'
+                mode === 'ai' ? 'bg-red-700 text-white' : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
               <Sparkles size={14} /> AI
@@ -301,7 +301,7 @@ export default function Workflows({ api, pending, onPendingConsumed }) {
               type="button"
               onClick={() => setMode('manual')}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                mode === 'manual' ? 'bg-violet-600 text-white' : 'text-neutral-400 hover:text-neutral-200'
+                mode === 'manual' ? 'bg-red-700 text-white' : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
               Manual
@@ -403,7 +403,7 @@ function StepCard({ step, index, total, onChange, onRemove, onMove }) {
     <Card className="p-3 flex flex-col gap-2 bg-neutral-950/40">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="grid place-items-center w-6 h-6 rounded-lg bg-violet-600/20 text-violet-300 shrink-0">
+          <span className="grid place-items-center w-6 h-6 rounded-lg bg-red-700/20 text-red-400 shrink-0">
             <Icon size={14} />
           </span>
           <span className="text-[11px] text-neutral-500">Step {index + 1}</span>
