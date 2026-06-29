@@ -1,5 +1,5 @@
 /**
- * POST /api/campaign
+ * POST /api/campaign  (scoped to the active client via x-client-id)
  *
  * Actions:
  *   generate-copy   — Ask Claude to write campaign copy (SMS, email, reactivation)
@@ -7,13 +7,13 @@
  *   send-email      — Send email to all contacts with a given tag
  *   reactivation    — Generate + send reactivation SMS+email to cold leads
  *
- * Sends target the local Neon contacts (the same ones shown in the dashboard) via
- * the unified messaging layer, so every send is logged to the inbox. Contacts
- * tagged "unsubscribed" are always excluded.
+ * Sends target the active client's Neon contacts (the same ones shown in the
+ * dashboard) via the unified messaging layer, using the client's sender identity.
+ * Contacts tagged "unsubscribed" are always excluded.
  */
 
 import Anthropic from '@anthropic-ai/sdk'
-import { sql, migrate } from './_db.js'
+import { sql, migrate, activeClientId } from './_db.js'
 import { sendSMS, sendEmail } from './_messaging.js'
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -25,29 +25,29 @@ function auth(req) {
 
 // ── Audience ───────────────────────────────────────────────────────────────────
 
-async function contactsForTag(tag) {
+async function contactsForTag(cid, tag) {
   const db = sql()
   if (tag && tag.trim()) {
     return db`
       SELECT * FROM contacts
-      WHERE ${tag} = ANY(tags) AND NOT ('unsubscribed' = ANY(tags))
+      WHERE client_id = ${cid} AND ${tag} = ANY(tags) AND NOT ('unsubscribed' = ANY(tags))
       ORDER BY created_at DESC
     `
   }
   return db`
     SELECT * FROM contacts
-    WHERE NOT ('unsubscribed' = ANY(tags))
+    WHERE client_id = ${cid} AND NOT ('unsubscribed' = ANY(tags))
     ORDER BY created_at DESC
   `
 }
 
-async function bulkSMS({ tag, message }) {
-  const contacts = await contactsForTag(tag)
+async function bulkSMS({ cid, client, tag, message }) {
+  const contacts = await contactsForTag(cid, tag)
   const results = []
   for (const contact of contacts) {
     if (!contact.phone) continue
     try {
-      await sendSMS({ contact, body: message })
+      await sendSMS({ contact, body: message, client })
       results.push({ contactId: contact.id, status: 'sent' })
     } catch (err) {
       results.push({ contactId: contact.id, status: 'error', error: err.message })
@@ -56,13 +56,13 @@ async function bulkSMS({ tag, message }) {
   return { sent: results.filter(r => r.status === 'sent').length, total: contacts.length, results }
 }
 
-async function bulkEmail({ tag, subject, html, fromName, fromEmail }) {
-  const contacts = await contactsForTag(tag)
+async function bulkEmail({ cid, client, tag, subject, html, fromName, fromEmail }) {
+  const contacts = await contactsForTag(cid, tag)
   const results = []
   for (const contact of contacts) {
     if (!contact.email) continue
     try {
-      await sendEmail({ contact, subject, body: html, fromName, fromEmail })
+      await sendEmail({ contact, subject, body: html, fromName, fromEmail, client })
       results.push({ contactId: contact.id, status: 'sent' })
     } catch (err) {
       results.push({ contactId: contact.id, status: 'error', error: err.message })
@@ -121,7 +121,7 @@ Return ONLY the HTML.`,
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-token')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-token, x-client-id')
 
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).end()
@@ -134,13 +134,21 @@ export default async function handler(req, res) {
   if (!auth(req)) return res.status(401).json({ error: 'Unauthorized' })
 
   await migrate()
+  const cid = await activeClientId(req)
+  const [client] = await sql()`SELECT * FROM clients WHERE id = ${cid}`
   const { action } = body
 
   try {
     // ── Generate AI copy ──────────────────────────────────────────────────
     if (action === 'generate-copy') {
       const { type, businessName, offer, tone, audience } = body
-      const copy = await generateCopy({ type, businessName, offer, tone, audience })
+      const copy = await generateCopy({
+        type,
+        businessName: businessName || client?.name,
+        offer: offer || client?.offer,
+        tone: tone || client?.tone,
+        audience,
+      })
       return res.status(200).json({ copy })
     }
 
@@ -148,7 +156,7 @@ export default async function handler(req, res) {
     if (action === 'send-sms') {
       const { tag, message } = body
       if (!tag || !message) return res.status(400).json({ error: 'tag and message required' })
-      const result = await bulkSMS({ tag, message })
+      const result = await bulkSMS({ cid, client, tag, message })
       return res.status(200).json({ success: true, ...result })
     }
 
@@ -156,18 +164,20 @@ export default async function handler(req, res) {
     if (action === 'send-email') {
       const { tag, subject, html, fromName, fromEmail } = body
       if (!tag || !subject || !html) return res.status(400).json({ error: 'tag, subject, and html required' })
-      const result = await bulkEmail({ tag, subject, html, fromName, fromEmail })
+      const result = await bulkEmail({ cid, client, tag, subject, html, fromName, fromEmail })
       return res.status(200).json({ success: true, ...result })
     }
 
     // ── Reactivation campaign — SMS + email to cold leads ─────────────────
     if (action === 'reactivation') {
       const { businessName, offer, tag = 'meta-lead', fromName, fromEmail } = body
+      const biz = businessName || client?.name
+      const off = offer || client?.offer
 
       const [sms, subject, emailHtml] = await Promise.all([
-        generateCopy({ type: 'reactivation_sms', businessName, offer }),
-        generateCopy({ type: 'email_subject', businessName, offer }),
-        generateCopy({ type: 'reactivation_email', businessName, offer }),
+        generateCopy({ type: 'reactivation_sms', businessName: biz, offer: off }),
+        generateCopy({ type: 'email_subject', businessName: biz, offer: off }),
+        generateCopy({ type: 'reactivation_email', businessName: biz, offer: off }),
       ])
 
       let parsedSubject = subject
@@ -177,8 +187,8 @@ export default async function handler(req, res) {
       } catch {}
 
       const [smsResult, emailResult] = await Promise.all([
-        bulkSMS({ tag, message: sms }),
-        bulkEmail({ tag, subject: parsedSubject, html: emailHtml, fromName, fromEmail }),
+        bulkSMS({ cid, client, tag, message: sms }),
+        bulkEmail({ cid, client, tag, subject: parsedSubject, html: emailHtml, fromName, fromEmail }),
       ])
 
       return res.status(200).json({

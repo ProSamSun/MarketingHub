@@ -1,7 +1,7 @@
 /**
- * GET /api/inbox  — conversation history for a contact (or all recent)
+ * GET /api/inbox  — conversation history (scoped to the active client via x-client-id)
  */
-import { sql, migrate } from './_db.js'
+import { sql, migrate, activeClientId } from './_db.js'
 
 function auth(req) {
   return req.headers['x-dashboard-token'] === process.env.DASHBOARD_PASSWORD
@@ -14,6 +14,7 @@ export default async function handler(req, res) {
 
   await migrate()
   const db = sql()
+  const cid = await activeClientId(req)
 
   const { contactId, limit = '50' } = req.query
 
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
         SELECT m.*, c.first_name, c.last_name
         FROM messages m
         JOIN contacts c ON c.id = m.contact_id
-        WHERE m.contact_id = ${contactId}
+        WHERE m.client_id = ${cid} AND m.contact_id = ${contactId}
         ORDER BY m.sent_at DESC
         LIMIT ${parseInt(limit)}
       `
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
         SELECT m.*, c.first_name, c.last_name
         FROM messages m
         JOIN contacts c ON c.id = m.contact_id
+        WHERE m.client_id = ${cid}
         ORDER BY m.sent_at DESC
         LIMIT ${parseInt(limit)}
       `

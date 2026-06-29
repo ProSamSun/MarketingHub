@@ -1,11 +1,11 @@
 /**
- * /api/contacts
+ * /api/contacts  (scoped to the active client via x-client-id)
  * GET    — list contacts (search, tag filter, pagination)
  * POST   — create contact
  * PUT    — update contact  (body: { id, ...fields })
  * DELETE — delete contact  (body: { id })
  */
-import { sql, migrate } from './_db.js'
+import { sql, migrate, activeClientId } from './_db.js'
 
 function auth(req) {
   const t = req.headers['x-dashboard-token'] || req.body?.token
@@ -15,12 +15,13 @@ function auth(req) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-token')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-token, x-client-id')
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (!auth(req)) return res.status(401).json({ error: 'Unauthorized' })
 
   await migrate()
   const db = sql()
+  const cid = await activeClientId(req)
 
   let body = {}
   if (req.method !== 'GET') {
@@ -36,31 +37,32 @@ export default async function handler(req, res) {
         const q = `%${search}%`
         contacts = await db`
           SELECT * FROM contacts
-          WHERE (first_name ILIKE ${q} OR last_name ILIKE ${q} OR email ILIKE ${q} OR phone ILIKE ${q})
+          WHERE client_id = ${cid}
+            AND (first_name ILIKE ${q} OR last_name ILIKE ${q} OR email ILIKE ${q} OR phone ILIKE ${q})
           ORDER BY created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
         `
       } else if (tag) {
         contacts = await db`
-          SELECT * FROM contacts WHERE ${tag} = ANY(tags)
+          SELECT * FROM contacts WHERE client_id = ${cid} AND ${tag} = ANY(tags)
           ORDER BY created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
         `
       } else {
         contacts = await db`
-          SELECT * FROM contacts
+          SELECT * FROM contacts WHERE client_id = ${cid}
           ORDER BY created_at DESC LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
         `
       }
 
-      const [{ count }] = await db`SELECT COUNT(*)::int AS count FROM contacts`
+      const [{ count }] = await db`SELECT COUNT(*)::int AS count FROM contacts WHERE client_id = ${cid}`
       return res.status(200).json({ contacts, total: count })
     }
 
     if (req.method === 'POST') {
       const { firstName, lastName, email, phone, tags = [], source = '', notes = '', metadata = {} } = body
 
-      // Check for duplicate
+      // Check for duplicate within this client
       if (email) {
-        const existing = await db`SELECT id FROM contacts WHERE email = ${email} LIMIT 1`
+        const existing = await db`SELECT id FROM contacts WHERE email = ${email} AND client_id = ${cid} LIMIT 1`
         if (existing.length > 0) {
           await db`
             UPDATE contacts SET
@@ -70,7 +72,6 @@ export default async function handler(req, res) {
               tags       = (SELECT ARRAY(SELECT DISTINCT unnest(tags || ${tags}::text[]))),
               updated_at = now()
             WHERE id = ${existing[0].id}
-            RETURNING *
           `
           const [updated] = await db`SELECT * FROM contacts WHERE id = ${existing[0].id}`
           return res.status(200).json({ contact: updated, updated: true })
@@ -78,8 +79,8 @@ export default async function handler(req, res) {
       }
 
       const [contact] = await db`
-        INSERT INTO contacts (first_name, last_name, email, phone, tags, source, notes, metadata)
-        VALUES (${firstName || ''}, ${lastName || ''}, ${email || null}, ${phone || null},
+        INSERT INTO contacts (client_id, first_name, last_name, email, phone, tags, source, notes, metadata)
+        VALUES (${cid}, ${firstName || ''}, ${lastName || ''}, ${email || null}, ${phone || null},
                 ${tags}, ${source}, ${notes}, ${JSON.stringify(metadata)})
         RETURNING *
       `
@@ -101,16 +102,16 @@ export default async function handler(req, res) {
           notes      = COALESCE(${notes     ?? null}, notes),
           metadata   = COALESCE(${metadata ? JSON.stringify(metadata) : null}::jsonb, metadata),
           updated_at = now()
-        WHERE id = ${id}
+        WHERE id = ${id} AND client_id = ${cid}
       `
-      const [contact] = await db`SELECT * FROM contacts WHERE id = ${id}`
+      const [contact] = await db`SELECT * FROM contacts WHERE id = ${id} AND client_id = ${cid}`
       return res.status(200).json({ contact })
     }
 
     if (req.method === 'DELETE') {
       const { id } = body
       if (!id) return res.status(400).json({ error: 'id required' })
-      await db`DELETE FROM contacts WHERE id = ${id}`
+      await db`DELETE FROM contacts WHERE id = ${id} AND client_id = ${cid}`
       return res.status(200).json({ deleted: true })
     }
 

@@ -7,7 +7,7 @@
  *   await api.put('/api/pipeline', { id, stageId })
  *   await api.del('/api/contacts', { id })
  */
-export function makeApi(token) {
+export function makeApi(token, clientId) {
   async function request(path, { method = 'GET', body, query } = {}) {
     let url = path
     if (query) {
@@ -19,12 +19,15 @@ export function makeApi(token) {
       if (s) url += (url.includes('?') ? '&' : '?') + s
     }
 
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-dashboard-token': token,
+    }
+    if (clientId) headers['x-client-id'] = clientId
+
     const res = await fetch(url, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-dashboard-token': token,
-      },
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     })
 

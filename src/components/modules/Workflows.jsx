@@ -39,6 +39,7 @@ const numVal = v => {
 
 export default function Workflows({ api, pending, onPendingConsumed }) {
   const [workflows, setWorkflows] = useState([])
+  const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -59,8 +60,14 @@ export default function Workflows({ api, pending, onPendingConsumed }) {
     setLoading(true)
     setError('')
     try {
-      const { workflows: list } = await api.get('/api/workflows')
-      setWorkflows(list || [])
+      const [listRes, statsRes] = await Promise.all([
+        api.get('/api/workflows'),
+        api.get('/api/workflows', { action: 'stats' }).catch(() => ({ stats: [] })),
+      ])
+      setWorkflows(listRes.workflows || [])
+      const map = {}
+      for (const s of (statsRes.stats || [])) map[s.workflow_id] = s
+      setStats(map)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -238,6 +245,15 @@ export default function Workflows({ api, pending, onPendingConsumed }) {
                     )}
                     {wf.created_at && (
                       <span className="text-[11px] text-neutral-600">· {shortDate(wf.created_at)}</span>
+                    )}
+                    {stats[wf.id] && stats[wf.id].total > 0 && (
+                      <span className="flex items-center gap-2 text-[11px]">
+                        <span className="text-neutral-600">·</span>
+                        <span className="text-emerald-400">{stats[wf.id].active} active</span>
+                        {stats[wf.id].completed > 0 && <span className="text-neutral-500">{stats[wf.id].completed} done</span>}
+                        {stats[wf.id].replied > 0 && <span className="text-sky-400">{stats[wf.id].replied} replied</span>}
+                        {stats[wf.id].error > 0 && <span className="text-red-400">{stats[wf.id].error} error</span>}
+                      </span>
                     )}
                   </div>
                 </div>

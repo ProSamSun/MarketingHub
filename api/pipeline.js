@@ -1,10 +1,10 @@
 /**
- * /api/pipeline
+ * /api/pipeline  (scoped to the active client via x-client-id)
  * GET  — stages + deals
  * POST — create deal
  * PUT  — move deal to stage or update fields
  */
-import { sql, migrate } from './_db.js'
+import { sql, migrate, activeClientId } from './_db.js'
 
 function auth(req) {
   const t = req.headers['x-dashboard-token'] || req.body?.token
@@ -14,12 +14,13 @@ function auth(req) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-token')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-dashboard-token, x-client-id')
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (!auth(req)) return res.status(401).json({ error: 'Unauthorized' })
 
   await migrate()
   const db = sql()
+  const cid = await activeClientId(req)
 
   let body = {}
   if (req.method !== 'GET') {
@@ -28,11 +29,12 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const stages = await db`SELECT * FROM pipeline_stages ORDER BY position`
+      const stages = await db`SELECT * FROM pipeline_stages WHERE client_id = ${cid} ORDER BY position`
       const deals  = await db`
         SELECT d.*, c.first_name, c.last_name, c.email, c.phone
         FROM deals d
         LEFT JOIN contacts c ON c.id = d.contact_id
+        WHERE d.client_id = ${cid}
         ORDER BY d.created_at DESC
       `
       return res.status(200).json({ stages, deals })
@@ -42,16 +44,16 @@ export default async function handler(req, res) {
       const { contactId, stageId, title, value = 0, notes = '' } = body
       if (!title) return res.status(400).json({ error: 'title required' })
 
-      // Default to first stage
+      // Default to this client's first stage
       let sid = stageId
       if (!sid) {
-        const [first] = await db`SELECT id FROM pipeline_stages ORDER BY position LIMIT 1`
+        const [first] = await db`SELECT id FROM pipeline_stages WHERE client_id = ${cid} ORDER BY position LIMIT 1`
         sid = first?.id
       }
 
       const [deal] = await db`
-        INSERT INTO deals (contact_id, stage_id, title, value, notes)
-        VALUES (${contactId || null}, ${sid}, ${title}, ${value}, ${notes})
+        INSERT INTO deals (client_id, contact_id, stage_id, title, value, notes)
+        VALUES (${cid}, ${contactId || null}, ${sid}, ${title}, ${value}, ${notes})
         RETURNING *
       `
       return res.status(201).json({ deal })
@@ -67,16 +69,16 @@ export default async function handler(req, res) {
           value    = COALESCE(${value   ?? null}, value),
           notes    = COALESCE(${notes   ?? null}, notes),
           updated_at = now()
-        WHERE id = ${id}
+        WHERE id = ${id} AND client_id = ${cid}
       `
-      const [deal] = await db`SELECT * FROM deals WHERE id = ${id}`
+      const [deal] = await db`SELECT * FROM deals WHERE id = ${id} AND client_id = ${cid}`
       return res.status(200).json({ deal })
     }
 
     if (req.method === 'DELETE') {
       const { id } = body
       if (!id) return res.status(400).json({ error: 'id required' })
-      await db`DELETE FROM deals WHERE id = ${id}`
+      await db`DELETE FROM deals WHERE id = ${id} AND client_id = ${cid}`
       return res.status(200).json({ deleted: true })
     }
 

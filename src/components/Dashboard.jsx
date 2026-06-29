@@ -1,11 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, Users, Workflow as WorkflowIcon, Kanban, Megaphone,
-  Inbox as InboxIcon, LogOut, Sparkles,
+  Inbox as InboxIcon, LogOut, Sparkles, Plus,
 } from 'lucide-react'
 import { makeApi } from '../lib/api.js'
 import { Loading } from '../lib/ui.jsx'
 import CommandBar from './CommandBar.jsx'
+import OnboardClient from './OnboardClient.jsx'
 
 // Code-split each module so the initial bundle stays small (recharts etc. load on demand)
 const AnalyticsHome = lazy(() => import('./modules/AnalyticsHome.jsx'))
@@ -25,10 +26,43 @@ const NAV = [
 ]
 
 export default function Dashboard({ token, onLogout }) {
-  const api = useMemo(() => makeApi(token), [token])
   const [tab, setTab] = useState('analytics')
   const [cmdOpen, setCmdOpen] = useState(false)
   const [pending, setPending] = useState({}) // per-module routing payloads from the command bar
+  const [clientId, setClientId] = useState(() => sessionStorage.getItem('mh_client') || '')
+  const [clients, setClients] = useState([])
+  const [onboardOpen, setOnboardOpen] = useState(false)
+  const api = useMemo(() => makeApi(token, clientId), [token, clientId])
+
+  const loadClients = useCallback(async () => {
+    try {
+      const data = await makeApi(token).get('/api/clients')
+      const list = data.clients || []
+      setClients(list)
+      setClientId(prev => {
+        if (prev && list.some(c => c.id === prev)) return prev
+        const def = list.find(c => c.slug === 'default') || list[0]
+        const id = def?.id || ''
+        if (id) sessionStorage.setItem('mh_client', id)
+        return id
+      })
+    } catch { /* ignore — falls back to the server's default client */ }
+  }, [token])
+
+  useEffect(() => { loadClients() }, [loadClients])
+
+  function selectClient(id) {
+    setClientId(id)
+    if (id) sessionStorage.setItem('mh_client', id)
+    setPending({})
+  }
+
+  function handleClientCreated(client) {
+    setClients(cs => [...cs.filter(c => c.id !== client.id), client])
+    selectClient(client.id)
+    setTab('analytics')
+    loadClients()
+  }
 
   // ⌘K / Ctrl+K toggles the command bar
   useEffect(() => {
@@ -76,14 +110,15 @@ export default function Dashboard({ token, onLogout }) {
     <div className="min-h-dvh md:flex">
       {/* ── Desktop sidebar ────────────────────────────────────────────── */}
       <aside className="hidden md:flex md:flex-col md:w-56 shrink-0 border-r border-neutral-800 bg-neutral-950 sticky top-0 h-dvh">
-        <div className="px-5 py-5">
-          <h1 className="font-bold tracking-tight flex items-center gap-2">
+        <div className="px-4 py-4 flex flex-col gap-3 border-b border-neutral-800">
+          <h1 className="font-bold tracking-tight flex items-center gap-2 px-1">
             <span className="grid place-items-center w-7 h-7 rounded-lg bg-violet-600 text-white text-sm">M</span>
             Marketing Hub
           </h1>
+          <ClientSwitcher clients={clients} value={clientId} onChange={selectClient} onOnboard={() => setOnboardOpen(true)} />
         </div>
 
-        <nav className="flex-1 px-3 flex flex-col gap-1">
+        <nav className="flex-1 px-3 pt-3 flex flex-col gap-1">
           {NAV.map(n => (
             <NavItem key={n.key} item={n} active={tab === n.key} onClick={() => setTab(n.key)} />
           ))}
@@ -107,12 +142,21 @@ export default function Dashboard({ token, onLogout }) {
       </aside>
 
       {/* ── Mobile top header ──────────────────────────────────────────── */}
-      <header className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-950/95 backdrop-blur">
-        <h1 className="font-bold text-sm tracking-tight flex items-center gap-2">
-          <span className="grid place-items-center w-6 h-6 rounded-md bg-violet-600 text-white text-xs">M</span>
-          Marketing Hub
-        </h1>
-        <div className="flex items-center gap-1">
+      <header className="md:hidden sticky top-0 z-20 flex items-center justify-between gap-2 px-4 py-3 border-b border-neutral-800 bg-neutral-950/95 backdrop-blur">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <span className="grid place-items-center w-6 h-6 rounded-md bg-violet-600 text-white text-xs shrink-0">M</span>
+          <select
+            value={clientId}
+            onChange={e => selectClient(e.target.value)}
+            aria-label="Active client"
+            className="min-w-0 max-w-[55vw] bg-transparent text-sm font-semibold text-neutral-100 outline-none truncate"
+          >
+            {clients.length === 0 && <option value="">Marketing Hub</option>}
+            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => setOnboardOpen(true)} className="p-2 text-violet-400 hover:text-violet-300" aria-label="Onboard client"><Plus size={18} /></button>
           <button onClick={() => setCmdOpen(true)} className="p-2 text-violet-400 hover:text-violet-300" aria-label="Ask AI"><Sparkles size={18} /></button>
           <button onClick={onLogout} className="p-2 text-neutral-500 hover:text-neutral-300" aria-label="Sign out"><LogOut size={18} /></button>
         </div>
@@ -121,7 +165,7 @@ export default function Dashboard({ token, onLogout }) {
       {/* ── Content ────────────────────────────────────────────────────── */}
       <main className="flex-1 min-w-0">
         <div className="max-w-5xl mx-auto w-full p-4 sm:p-6 pb-28 md:pb-10">
-          <Suspense fallback={<Loading />}>
+          <Suspense key={clientId} fallback={<Loading />}>
             {tab === 'analytics' && <AnalyticsHome {...moduleProps('analytics')} onNavigate={setTab} />}
             {tab === 'contacts'  && <Contacts  {...moduleProps('contacts')} />}
             {tab === 'workflows' && <Workflows {...moduleProps('workflows')} />}
@@ -151,6 +195,34 @@ export default function Dashboard({ token, onLogout }) {
       </nav>
 
       <CommandBar api={api} open={cmdOpen} onClose={() => setCmdOpen(false)} onRoute={routeIntent} />
+      <OnboardClient api={api} open={onboardOpen} onClose={() => setOnboardOpen(false)} onCreated={handleClientCreated} />
+    </div>
+  )
+}
+
+function ClientSwitcher({ clients, value, onChange, onOnboard }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[10px] uppercase tracking-widest text-neutral-600 px-1">Client</span>
+      <div className="flex gap-1.5">
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          aria-label="Active client"
+          className="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-2 text-sm text-neutral-100 outline-none focus:border-violet-500 transition-colors truncate"
+        >
+          {clients.length === 0 && <option value="">Loading…</option>}
+          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <button
+          onClick={onOnboard}
+          title="Onboard client"
+          aria-label="Onboard client"
+          className="px-2.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white transition-colors shrink-0"
+        >
+          <Plus size={16} />
+        </button>
+      </div>
     </div>
   )
 }

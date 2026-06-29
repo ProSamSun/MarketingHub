@@ -15,8 +15,43 @@ export function sql() {
   return _sql
 }
 
+let _migrated = false
+
 export async function migrate() {
+  // Schema is idempotent; skip re-running within a warm serverless instance.
+  if (_migrated) return { ok: true }
   const db = sql()
+
+  // ── Tenancy: a "client" is an agency client business that owns its own data ──
+  await db`
+    CREATE TABLE IF NOT EXISTS clients (
+      id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name          TEXT NOT NULL,
+      slug          TEXT UNIQUE,
+      industry      TEXT,
+      offer         TEXT,
+      outcome       TEXT,
+      tone          TEXT DEFAULT 'friendly',
+      rep_name      TEXT,
+      from_name     TEXT,
+      from_email    TEXT,
+      twilio_number TEXT,
+      booking_link  TEXT,
+      lead_tag      TEXT DEFAULT 'new-lead',
+      meta_page_ids TEXT[] DEFAULT '{}',
+      meta_form_ids TEXT[] DEFAULT '{}',
+      metadata      JSONB DEFAULT '{}',
+      active        BOOLEAN DEFAULT true,
+      created_at    TIMESTAMPTZ DEFAULT now()
+    )
+  `
+
+  // A "Default" client owns all data that predates multi-tenancy.
+  await db`
+    INSERT INTO clients (name, slug)
+    SELECT 'Default', 'default'
+    WHERE NOT EXISTS (SELECT 1 FROM clients WHERE slug = 'default')
+  `
 
   await db`
     CREATE TABLE IF NOT EXISTS contacts (
@@ -142,5 +177,53 @@ export async function migrate() {
     )
   `
 
+  // ── Multi-tenant retrofit: add client_id to existing tables + backfill ────────
+  await db`ALTER TABLE contacts        ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
+  await db`ALTER TABLE workflows       ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
+  await db`ALTER TABLE pipeline_stages ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
+  await db`ALTER TABLE deals           ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
+  await db`ALTER TABLE messages        ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
+  await db`ALTER TABLE enrollments     ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
+  await db`ALTER TABLE campaigns       ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
+
+  await db`UPDATE contacts        SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
+  await db`UPDATE workflows       SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
+  await db`UPDATE pipeline_stages SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
+  await db`UPDATE deals           SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
+  await db`UPDATE messages        SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
+  await db`UPDATE enrollments     SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
+  await db`UPDATE campaigns       SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
+
+  // Non-unique (existing data may legitimately repeat an email); app-level dedupe is client-scoped.
+  await db`CREATE INDEX IF NOT EXISTS contacts_client_email_idx ON contacts(client_id, email)`
+  await db`CREATE INDEX IF NOT EXISTS contacts_client_idx        ON contacts(client_id)`
+  await db`CREATE INDEX IF NOT EXISTS workflows_client_idx       ON workflows(client_id)`
+  await db`CREATE INDEX IF NOT EXISTS pipeline_stages_client_idx ON pipeline_stages(client_id)`
+  await db`CREATE INDEX IF NOT EXISTS deals_client_idx           ON deals(client_id)`
+  await db`CREATE INDEX IF NOT EXISTS messages_client_idx        ON messages(client_id)`
+  await db`CREATE INDEX IF NOT EXISTS enrollments_client_idx     ON enrollments(client_id)`
+
+  _migrated = true
   return { ok: true }
+}
+
+// ── Tenant resolution ─────────────────────────────────────────────────────────
+let _defaultClientId = null
+
+export async function defaultClientId() {
+  if (_defaultClientId) return _defaultClientId
+  const [c] = await sql()`SELECT id FROM clients WHERE slug = 'default' LIMIT 1`
+  _defaultClientId = c?.id || null
+  return _defaultClientId
+}
+
+/**
+ * The client the current request is scoped to. The dashboard sends x-client-id;
+ * everything falls back to the Default client. This is organizational scoping for
+ * the single agency owner (shared DASHBOARD_PASSWORD), not a security boundary.
+ */
+export async function activeClientId(req) {
+  const h = req.headers['x-client-id']
+  if (h) return h
+  return defaultClientId()
 }

@@ -1,16 +1,15 @@
 /**
  * POST /api/webhook-twilio  — incoming SMS replies from Twilio
  *
- * Twilio posts inbound messages as application/x-www-form-urlencoded with fields
- * like From, To, Body, MessageSid. We match the sender to a contact (by phone),
- * create one if none exists, and store the message as direction='inbound' so it
- * shows up in the dashboard inbox.
+ * Maps the inbound message to a client via the destination number (To) against
+ * clients.twilio_number, matches/creates the sender contact (scoped to that
+ * client), stores the message as direction='inbound', and HALTS the contact's
+ * active outbound sequences (stop-on-reply) so a human can take over.
  *
- * Setup in Twilio:
- *   Phone Numbers → your number → Messaging → "A message comes in"
+ * Setup in Twilio: Phone Numbers → your number → Messaging → "A message comes in"
  *   Webhook: https://your-app.vercel.app/api/webhook-twilio  (HTTP POST)
  */
-import { sql, migrate } from './_db.js'
+import { sql, migrate, defaultClientId } from './_db.js'
 
 function parseBody(req) {
   if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return req.body
@@ -21,7 +20,6 @@ function parseBody(req) {
   return out
 }
 
-// Empty TwiML so Twilio doesn't send an auto-reply
 function twiml(res) {
   res.setHeader('Content-Type', 'text/xml; charset=utf-8')
   return res.status(200).send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>')
@@ -45,10 +43,24 @@ export default async function handler(req, res) {
     await migrate()
     const db = sql()
 
-    // Match by last 10 digits so +1XXXXXXXXXX matches a stored XXXXXXXXXX
+    // Route to a client by the destination (our) number; fall back to Default
+    let cid = null
+    if (to) {
+      const [c] = await db`
+        SELECT id FROM clients
+        WHERE twilio_number IS NOT NULL
+          AND right(regexp_replace(twilio_number, '\D', '', 'g'), 10) = right(regexp_replace(${to}, '\D', '', 'g'), 10)
+        LIMIT 1
+      `
+      cid = c?.id || null
+    }
+    if (!cid) cid = await defaultClientId()
+
+    // Match the sender within this client by last 10 digits
     const matches = await db`
       SELECT id FROM contacts
-      WHERE phone IS NOT NULL
+      WHERE client_id = ${cid}
+        AND phone IS NOT NULL
         AND right(regexp_replace(phone, '\D', '', 'g'), 10) = right(regexp_replace(${from}, '\D', '', 'g'), 10)
       ORDER BY created_at ASC
       LIMIT 1
@@ -57,25 +69,30 @@ export default async function handler(req, res) {
     let contactId = matches[0]?.id
     if (!contactId) {
       const [created] = await db`
-        INSERT INTO contacts (first_name, last_name, phone, tags, source)
-        VALUES ('', '', ${from}, ARRAY['sms-inbound']::text[], 'SMS')
+        INSERT INTO contacts (client_id, first_name, last_name, phone, tags, source)
+        VALUES (${cid}, '', '', ${from}, ARRAY['sms-inbound']::text[], 'SMS')
         RETURNING id
       `
       contactId = created.id
-      console.log(`[webhook-twilio] Created contact for inbound number ${from}`)
+      console.log(`[webhook-twilio] Created contact for inbound ${from} (client ${cid})`)
     }
 
     await db`
-      INSERT INTO messages (contact_id, type, direction, body, status, metadata)
-      VALUES (${contactId}, 'sms', 'inbound', ${text}, 'received',
+      INSERT INTO messages (client_id, contact_id, type, direction, body, status, metadata)
+      VALUES (${cid}, ${contactId}, 'sms', 'inbound', ${text}, 'received',
               ${JSON.stringify({ sid, from, to })})
     `
 
-    console.log(`[webhook-twilio] Stored inbound SMS from ${from}`)
+    // Stop-on-reply: halt active outbound sequences for this contact
+    await db`
+      UPDATE enrollments SET status = 'replied', completed_at = now()
+      WHERE contact_id = ${contactId} AND status = 'active'
+    `
+
+    console.log(`[webhook-twilio] Inbound SMS from ${from} stored; sequences halted`)
     return twiml(res)
   } catch (err) {
     console.error('[webhook-twilio]', err)
-    // Still return valid TwiML so Twilio doesn't retry-storm
     return twiml(res)
   }
 }
