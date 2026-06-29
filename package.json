@@ -11,10 +11,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
+    "@neondatabase/serverless": "^1.1.0",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.22.0",
+    "pg": "^8.22.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "resend": "^6.16.0",
+    "twilio": "^6.0.2"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",
