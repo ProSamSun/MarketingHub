@@ -201,6 +201,45 @@ export default async function handler(req, res) {
       return res.status(201).json(result)
     }
 
+    // ── Meta connection diagnosis / fix (uses the stored Page token server-side) ──
+    if (req.query.action === 'meta-check' || req.query.action === 'meta-subscribe') {
+      const clientId = body.clientId || req.query.clientId
+      if (!clientId) return res.status(400).json({ error: 'clientId required' })
+      const [c] = await db`SELECT id, name, meta_page_ids, meta_page_token FROM clients WHERE id = ${clientId}`
+      if (!c) return res.status(404).json({ error: 'Client not found' })
+      const tok = c.meta_page_token
+      const pageId = (c.meta_page_ids || [])[0]
+      if (!tok) return res.status(200).json({ ok: false, reason: 'No Page Access Token configured', client: c.name, pageId })
+      if (!pageId) return res.status(200).json({ ok: false, reason: 'No Page ID configured', client: c.name })
+
+      const V = 'v21.0'
+      const enc = encodeURIComponent(tok)
+      const g = async (u, m) => { const r = await fetch(u, m ? { method: m } : undefined); let d; try { d = await r.json() } catch { d = {} } return d }
+
+      if (req.query.action === 'meta-subscribe') {
+        const result = await g(`https://graph.facebook.com/${V}/${pageId}/subscribed_apps?subscribed_fields=leadgen&access_token=${enc}`, 'POST')
+        return res.status(200).json({ action: 'subscribe', pageId, result })
+      }
+
+      // read-only diagnosis
+      const me = await g(`https://graph.facebook.com/${V}/me?fields=id,name,category&access_token=${enc}`)
+      const accounts = await g(`https://graph.facebook.com/${V}/me/accounts?fields=id,name&access_token=${enc}`)
+      const subs = await g(`https://graph.facebook.com/${V}/${pageId}/subscribed_apps?access_token=${enc}`)
+      const accountIds = (accounts?.data || []).map(a => String(a.id))
+      return res.status(200).json({
+        client: c.name,
+        pageId,
+        tokenValid: !me?.error,
+        identity: me?.error ? { error: me.error?.message } : me,
+        pageInManageableList: accountIds.includes(String(pageId)),
+        manageablePages: (accounts?.data || []).map(a => ({ id: a.id, name: a.name })),
+        accountsError: accounts?.error?.message || null,
+        leadgenSubscribed: !!(subs?.data || []).some(a => (a.subscribed_fields || []).includes('leadgen')),
+        subscribedApps: subs?.data || subs,
+        subscribedAppsError: subs?.error?.message || null,
+      })
+    }
+
     if (req.method === 'GET') {
       const rows = await db`SELECT * FROM clients ORDER BY created_at ASC`
       // Never expose the Page token to the browser; just whether one is configured.
