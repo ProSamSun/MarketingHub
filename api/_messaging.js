@@ -26,16 +26,36 @@ function resendClient() {
 }
 
 function interpolate(template, contact, client = {}) {
+  const firstName    = contact.first_name  || ''
+  const lastName     = contact.last_name   || ''
+  const fullName     = [firstName, lastName].filter(Boolean).join(' ')
+  const businessName = client.name || client.business_name || client.business || ''
+  const repName      = client.rep_name      || ''
+  const offer        = client.offer         || ''
+  const bookingLink  = client.booking_link  || ''
+  const fromName     = client.from_name     || repName
+
   return (template || '')
-    .replace(/\{\{firstName\}\}/g, contact.first_name || '')
-    .replace(/\{\{lastName\}\}/g,  contact.last_name  || '')
-    .replace(/\{\{fullName\}\}/g,  [contact.first_name, contact.last_name].filter(Boolean).join(' '))
-    .replace(/\{\{email\}\}/g,     contact.email || '')
-    .replace(/\{\{phone\}\}/g,     contact.phone || '')
-    .replace(/\{\{business\}\}/g,  client.name || client.business || '')
-    .replace(/\{\{repName\}\}/g,   client.rep_name || '')
-    .replace(/\{\{bookingLink\}\}/g, client.booking_link || '')
-    .replace(/\{\{offer\}\}/g,     client.offer || '')
+    // snake_case (used in templates)
+    .replace(/\{\{first_name\}\}/gi,    firstName)
+    .replace(/\{\{last_name\}\}/gi,     lastName)
+    .replace(/\{\{full_name\}\}/gi,     fullName)
+    .replace(/\{\{business_name\}\}/gi, businessName)
+    .replace(/\{\{rep_name\}\}/gi,      repName)
+    .replace(/\{\{from_name\}\}/gi,     fromName)
+    .replace(/\{\{offer\}\}/gi,         offer)
+    .replace(/\{\{booking_link\}\}/gi,  bookingLink)
+    .replace(/\{\{email\}\}/gi,         contact.email || '')
+    .replace(/\{\{phone\}\}/gi,         contact.phone || '')
+    // camelCase (legacy — keep working)
+    .replace(/\{\{firstName\}\}/g,      firstName)
+    .replace(/\{\{lastName\}\}/g,       lastName)
+    .replace(/\{\{fullName\}\}/g,       fullName)
+    .replace(/\{\{business\}\}/g,       businessName)
+    .replace(/\{\{repName\}\}/g,        repName)
+    .replace(/\{\{bookingLink\}\}/g,    bookingLink)
+    // fallback: strip any remaining unreplaced {{...}} so they don't ship raw
+    .replace(/\{\{[^}]+\}\}/g, '')
 }
 
 // ── Unsubscribe helpers ───────────────────────────────────────────────────────
