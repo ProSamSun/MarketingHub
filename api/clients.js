@@ -201,6 +201,26 @@ export default async function handler(req, res) {
       return res.status(201).json(result)
     }
 
+    // ── Register the app-level webhook (callback URL + leadgen) via Graph API ──
+    if (req.query.action === 'meta-app-subscribe') {
+      const APP_ID = process.env.META_APP_ID
+      const APP_SECRET = process.env.META_APP_SECRET
+      const VERIFY = process.env.META_WEBHOOK_VERIFY_TOKEN
+      if (!APP_ID || !APP_SECRET) return res.status(400).json({ error: 'META_APP_ID / META_APP_SECRET not set' })
+      if (!VERIFY) return res.status(400).json({ error: 'META_WEBHOOK_VERIFY_TOKEN not set' })
+      const base = (process.env.PUBLIC_BASE_URL || `https://${req.headers.host}`).replace(/\/$/, '')
+      const callback = `${base}/api/webhook-meta`
+      const V = 'v21.0'
+      const appToken = `${APP_ID}|${APP_SECRET}`
+      const g = async (u, m) => { const r = await fetch(u, m ? { method: m } : undefined); let d; try { d = await r.json() } catch { d = {} } return d }
+      const subscribe = await g(
+        `https://graph.facebook.com/${V}/${APP_ID}/subscriptions?object=page&callback_url=${encodeURIComponent(callback)}&fields=leadgen&include_values=true&verify_token=${encodeURIComponent(VERIFY)}&access_token=${encodeURIComponent(appToken)}`,
+        'POST',
+      )
+      const current = await g(`https://graph.facebook.com/${V}/${APP_ID}/subscriptions?access_token=${encodeURIComponent(appToken)}`)
+      return res.status(200).json({ callback, subscribe, current: current.data || current })
+    }
+
     // ── Meta connection diagnosis / fix (uses the stored Page token server-side) ──
     if (req.query.action === 'meta-check' || req.query.action === 'meta-subscribe') {
       const clientId = body.clientId || req.query.clientId
