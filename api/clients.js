@@ -16,6 +16,7 @@
 import { sql, migrate } from './_db.js'
 import { enrollContact } from './_automation.js'
 import { BLUEPRINTS, messageSteps, assembleSteps } from './_blueprints.js'
+import { syncClientLeads } from './_meta.js'
 import Anthropic from '@anthropic-ai/sdk'
 
 export const config = { maxDuration: 60 }
@@ -201,6 +202,19 @@ export default async function handler(req, res) {
       return res.status(201).json(result)
     }
 
+    // ── Pull leads from the client's ad account (manual / backfill) ───────────
+    if (req.query.action === 'meta-sync') {
+      const clientId = body.clientId || req.query.clientId
+      if (!clientId) return res.status(400).json({ error: 'clientId required' })
+      const [c] = await db`SELECT * FROM clients WHERE id = ${clientId}`
+      if (!c) return res.status(404).json({ error: 'Client not found' })
+      const result = await syncClientLeads(c, {
+        sinceDays: body.sinceDays ?? null,        // null = full backfill
+        autoEnroll: body.autoEnroll ?? false,     // backfill defaults to import-only
+      })
+      return res.status(200).json(result)
+    }
+
     // ── Register the app-level webhook (callback URL + leadgen) via Graph API ──
     if (req.query.action === 'meta-app-subscribe') {
       const APP_ID = process.env.META_APP_ID
@@ -263,7 +277,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const rows = await db`SELECT * FROM clients ORDER BY created_at ASC`
       // Never expose the Page token to the browser; just whether one is configured.
-      const clients = rows.map(c => ({ ...c, meta_page_token: undefined, meta_page_token_set: !!c.meta_page_token }))
+      const clients = rows.map(c => ({ ...c, meta_page_token: undefined, meta_ads_token: undefined, meta_page_token_set: !!c.meta_page_token }))
       return res.status(200).json({ clients })
     }
 
@@ -301,11 +315,13 @@ export default async function handler(req, res) {
           meta_page_ids = COALESCE(${b.metaPageIds   ?? null}::text[], meta_page_ids),
           meta_form_ids = COALESCE(${b.metaFormIds   ?? null}::text[], meta_form_ids),
           meta_page_token = COALESCE(NULLIF(${b.metaPageToken ?? ''}, ''), meta_page_token),
+          meta_ad_account_id = COALESCE(${b.metaAdAccountId ?? null}, meta_ad_account_id),
+          meta_ads_token  = COALESCE(NULLIF(${b.metaAdsToken ?? ''}, ''), meta_ads_token),
           active        = COALESCE(${b.active         ?? null}, active)
         WHERE id = ${id}
       `
       const [row] = await db`SELECT * FROM clients WHERE id = ${id}`
-      const client = row ? { ...row, meta_page_token: undefined, meta_page_token_set: !!row.meta_page_token } : null
+      const client = row ? { ...row, meta_page_token: undefined, meta_ads_token: undefined, meta_page_token_set: !!row.meta_page_token } : null
       return res.status(200).json({ client })
     }
 

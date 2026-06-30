@@ -41,6 +41,9 @@ export async function migrate() {
       meta_page_ids TEXT[] DEFAULT '{}',
       meta_form_ids TEXT[] DEFAULT '{}',
       meta_page_token TEXT,
+      meta_ad_account_id TEXT,
+      meta_ads_token TEXT,
+      meta_last_sync TIMESTAMPTZ,
       metadata      JSONB DEFAULT '{}',
       active        BOOLEAN DEFAULT true,
       created_at    TIMESTAMPTZ DEFAULT now()
@@ -187,6 +190,9 @@ export async function migrate() {
   await db`ALTER TABLE enrollments     ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
   await db`ALTER TABLE campaigns       ADD COLUMN IF NOT EXISTS client_id UUID REFERENCES clients(id) ON DELETE CASCADE`
   await db`ALTER TABLE clients         ADD COLUMN IF NOT EXISTS meta_page_token TEXT`
+  await db`ALTER TABLE clients         ADD COLUMN IF NOT EXISTS meta_ad_account_id TEXT`
+  await db`ALTER TABLE clients         ADD COLUMN IF NOT EXISTS meta_ads_token TEXT`
+  await db`ALTER TABLE clients         ADD COLUMN IF NOT EXISTS meta_last_sync TIMESTAMPTZ`
 
   await db`UPDATE contacts        SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
   await db`UPDATE workflows       SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
