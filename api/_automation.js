@@ -146,11 +146,15 @@ async function executeStep(step, contact, client, workflowId, stepIndex) {
 
   if (step.type === 'send_sms') {
     if (!contact.phone) return
-    await sendSMS({ contact, body: step.body, client, workflowId, stepIndex })
+    // A failed SMS (bad number, carrier reject) must NOT abort the rest of the
+    // sequence — log it and let the email + later steps still run.
+    try { await sendSMS({ contact, body: step.body, client, workflowId, stepIndex }) }
+    catch (e) { console.error(`[automation] SMS failed for ${contact.id}:`, e.message) }
 
   } else if (step.type === 'send_email') {
     if (!contact.email) return
-    await sendEmail({ contact, subject: step.subject, body: step.body, fromName: step.fromName, fromEmail: step.fromEmail, client, workflowId, stepIndex })
+    try { await sendEmail({ contact, subject: step.subject, body: step.body, fromName: step.fromName, fromEmail: step.fromEmail, client, workflowId, stepIndex }) }
+    catch (e) { console.error(`[automation] Email failed for ${contact.id}:`, e.message) }
 
   } else if (step.type === 'add_tag') {
     await db`
