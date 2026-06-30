@@ -202,6 +202,34 @@ export async function migrate() {
   await db`UPDATE enrollments     SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
   await db`UPDATE campaigns       SET client_id = (SELECT id FROM clients WHERE slug='default') WHERE client_id IS NULL`
 
+  // ── Templates: editable AI prompts per client ─────────────────────────────
+  await db`
+    CREATE TABLE IF NOT EXISTS templates (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      client_id   UUID REFERENCES clients(id) ON DELETE CASCADE,
+      key         TEXT NOT NULL,
+      label       TEXT NOT NULL,
+      body        TEXT NOT NULL,
+      channel     TEXT NOT NULL DEFAULT 'sms',
+      updated_at  TIMESTAMPTZ DEFAULT now(),
+      UNIQUE(client_id, key)
+    )
+  `
+
+  // ── Webhook events: audit log of every inbound Meta/Twilio event ──────────
+  await db`
+    CREATE TABLE IF NOT EXISTS webhook_events (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      client_id   UUID REFERENCES clients(id) ON DELETE CASCADE,
+      source      TEXT NOT NULL,
+      event_type  TEXT,
+      payload     JSONB DEFAULT '{}',
+      processed   BOOLEAN DEFAULT false,
+      received_at TIMESTAMPTZ DEFAULT now()
+    )
+  `
+  await db`CREATE INDEX IF NOT EXISTS webhook_events_client_idx ON webhook_events(client_id, received_at DESC)`
+
   // Non-unique (existing data may legitimately repeat an email); app-level dedupe is client-scoped.
   await db`CREATE INDEX IF NOT EXISTS contacts_client_email_idx ON contacts(client_id, email)`
   await db`CREATE INDEX IF NOT EXISTS contacts_client_idx        ON contacts(client_id)`

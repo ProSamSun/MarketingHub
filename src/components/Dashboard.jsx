@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, Users, Workflow as WorkflowIcon, Kanban, Megaphone,
-  Inbox as InboxIcon, LogOut, Sparkles, Plus, Settings as SettingsIcon,
+  Inbox as InboxIcon, LogOut, Sparkles, Plus, Settings as SettingsIcon, Terminal,
 } from 'lucide-react'
 import { makeApi } from '../lib/api.js'
 import { Loading } from '../lib/ui.jsx'
@@ -16,6 +16,7 @@ const Pipeline      = lazy(() => import('./modules/Pipeline.jsx'))
 const Campaigns     = lazy(() => import('./modules/Campaigns.jsx'))
 const Inbox         = lazy(() => import('./modules/Inbox.jsx'))
 const Settings      = lazy(() => import('./modules/Settings.jsx'))
+const Developer     = lazy(() => import('./modules/Developer.jsx'))
 
 const NAV = [
   { key: 'analytics', label: 'Home',      icon: LayoutDashboard },
@@ -24,6 +25,7 @@ const NAV = [
   { key: 'pipeline',  label: 'Pipeline',  icon: Kanban },
   { key: 'campaigns', label: 'Campaigns', icon: Megaphone },
   { key: 'inbox',     label: 'Inbox',     icon: InboxIcon },
+  { key: 'developer', label: 'Developer', icon: Terminal },
 ]
 
 export default function Dashboard({ token, onLogout }) {
@@ -190,6 +192,7 @@ export default function Dashboard({ token, onLogout }) {
             {tab === 'pipeline'  && <Pipeline  {...moduleProps('pipeline')} />}
             {tab === 'campaigns' && <Campaigns {...moduleProps('campaigns')} />}
             {tab === 'inbox'     && <Inbox     {...moduleProps('inbox')} />}
+            {tab === 'developer' && <Developer api={api} />}
             {tab === 'settings'  && <Settings  api={api} client={clients.find(c => c.id === clientId)} onSaved={loadClients} />}
           </Suspense>
         </div>

@@ -113,6 +113,15 @@ export default async function handler(req, res) {
   await migrate()
   const db = sql()
 
+  // Log the raw inbound event for the Developer console
+  try {
+    const defCid = await defaultClientId()
+    await db`
+      INSERT INTO webhook_events (client_id, source, event_type, payload, processed)
+      VALUES (${defCid}, 'meta', ${body?.object || 'leadgen'}, ${JSON.stringify(body)}, false)
+    `
+  } catch { /* non-critical */ }
+
   const entries = body?.entry ?? []
   const processed = []
 
